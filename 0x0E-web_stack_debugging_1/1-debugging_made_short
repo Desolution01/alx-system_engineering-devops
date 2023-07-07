@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# a bash script similar to task 0 but less code lines are used for it.
+ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+service nginx restart
+kill "$(pgrep 'nginx' | head -1)"
