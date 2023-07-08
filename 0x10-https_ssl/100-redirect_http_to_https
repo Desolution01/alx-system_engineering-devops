@@ -1,4 +1,3 @@
-
 global
 	log /dev/log	local0
 	log /dev/log	local1 notice
@@ -13,15 +12,15 @@ global
 	ca-base /etc/ssl/certs
 	crt-base /etc/ssl/private
 
-	# Default ciphers to use on SSL-enabled listening sockets.
-	# For more information, see ciphers(1SSL). This list is from:
-	#  https://hynek.me/articles/hardening-your-web-servers-ssl-ciphers/
-	ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS
-	ssl-default-bind-options no-sslv3
+	# See: https://ssl-config.mozilla.org/#server=haproxy&server-version=2.0.3&config=intermediate
+        ssl-default-bind-ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+        ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
+        ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
 
 defaults
 	log	global
 	mode	http
+	option forwardfor
 	option	httplog
 	option	dontlognull
         timeout connect 5000
@@ -35,32 +34,16 @@ defaults
 	errorfile 503 /etc/haproxy/errors/503.http
 	errorfile 504 /etc/haproxy/errors/504.http
 
-# The frontend only listens on port 80
-# If it detects a LetsEncrypt request, is uses the LE backend
-# Else it goes to the default backend for the web servers
-frontend http
-	bind *:80
+frontend 210276-web
+    	bind *:80
+    	bind *:443 ssl crt /etc/ssl/www.hillstop.tech/www.hillstop.tech.pem
 
-	# This is our new config that listens on port 443 for SSL connections
-	bind *:443 ssl crt /etc/ssl/www.superstaz.tech/www.superstaz.tech.pem
+    	# Redirect if HTTPS is not used
+    	redirect scheme https code 301 if !{ ssl_fc }
 
-	# Redirect if HTTPS is *not* used
-	redirect scheme https code 301 if !{ ssl_fc }
+    	default_backend 210276-web_servers
 
-	# Test URI to see if its a letsencrypt request	
-	acl letsencrypt-acl path_beg /.well-known/acme-challenge/
-	use_backend letsencrypt-backend if letsencrypt-acl
-
-	mode http
-	default_backend web-backend
-
-# LE Backend
-backend letsencrypt-backend
-	server letsencrypt 127.0.0.1:8888
-
-# Normal (default) Backend
-# for web apps
-backend web-backend
-	balance roundrobin
-	server web-01 54.208.153.21:80 check
-	server web-02 35.153.83.20:80 check
+backend 210276-web_servers
+    	balance roundrobin
+    	server web-01 54.237.80.101:80 check
+    	server web-02 100.26.121.175:80 check
