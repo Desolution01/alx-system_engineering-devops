@@ -1,1 +1,35 @@
-pgrep gunicorn | xargs | cut -d ' ' -f 1 | xargs kill -HUP
+#!/bin/bash
+
+# Get the process IDs of Gunicorn workers
+worker_pids=($(pgrep -f "gunicorn"))
+
+# Calculate the number of workers
+num_workers=${#worker_pids[@]}
+
+# Loop through the worker PIDs and gracefully reload them
+for ((i = 0; i < num_workers; i++)); do
+    echo "Gracefully shutting down worker: ${worker_pids[$i]}"
+    kill -HUP "${worker_pids[$i]}"
+
+    # Wait for the worker to shut down
+    sleep 5
+
+    # Start a new worker with updated code or configuration
+    new_pid=$(gunicorn --workers 1 --bind 0.0.0.0:8001 --error-logfile /tmp/airbnb-error.log --access-logfile /tmp/airbnb-access.log web_flask.0-hello_route:app 2>&1 | grep 'Starting gunicorn' | awk '{print $4}')
+
+    # Wait for the new worker to start
+    sleep 5
+
+    # Check if the new worker started successfully
+    if [[ -n $new_pid ]]; then
+        echo "New worker started: $new_pid"
+    else
+        echo "Failed to start new worker."
+        exit 1
+    fi
+
+    echo "Successfully updated worker: ${worker_pids[$i]}"
+done
+
+echo "Gunicorn reload complete."
+
